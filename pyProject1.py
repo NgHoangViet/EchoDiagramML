@@ -15,11 +15,11 @@ import torch.nn.functional as F
 import pytorch_lightning as pl
 from pytorch_lightning import Trainer
 
-# Device configuration
 
 # Hyper-parameters
 num_classes = 3
-num_epochs = 2
+VGG16_epochs = 2
+ConvNet_epochs = 5
 batch_size = 100
 learning_rate = 0.001
 
@@ -66,7 +66,7 @@ class VGG16(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         images, labels = batch
-        #images = images.reshape(-1, 32*32)
+        # images = images.reshape(-1, 32*32)
 
         # Forward pass
         outputs = self(images)
@@ -92,7 +92,7 @@ class VGG16(pl.LightningModule):
 
     def test_step(self, batch, batch_idx):
         images, labels = batch
-        #images = images.reshape(-1, 32*32)
+        # images = images.reshape(-1, 32*32)
 
         # Forward pass
         outputs = self(images)
@@ -128,7 +128,7 @@ class ConvNet(pl.LightningModule):
         x = self.pool(F.relu(self.conv2(x)))  # -> n, 16, 5, 5
         x = x.view(-1, 16 * 5 * 5)  # -> n, 400
         x = F.relu(self.fc1(x))  # -> n, 120
-        x = F.relu(self.fc2(x))  # -> n, 84
+        x = F.relu(self.fc2(x))  # -> n, 70
         x = self.fc3(x)  # -> n, 3
         return x
 
@@ -176,13 +176,13 @@ class ConvNet(pl.LightningModule):
         return {'test_loss': test_loss, 'log': tensorboard_logs}
 
     def configure_optimizers(self):
-        return torch.optim.SGD(model.parameters(), lr=learning_rate)
+        return torch.optim.Adam(model.parameters(), lr=learning_rate)
 
 
 if __name__ == '__main__':
-    model = VGG16()
+    model = ConvNet()
 
-    trainer = Trainer( auto_lr_find=True, max_epochs=num_epochs, fast_dev_run=False, auto_scale_batch_size=True)
+    trainer = Trainer(auto_lr_find=True, max_epochs=ConvNet_epochs, fast_dev_run=False, auto_scale_batch_size=True)
     trainer.fit(model)
 
     # fast_dev_run=True -> runs single batch through training and validation
