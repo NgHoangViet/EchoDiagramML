@@ -9,12 +9,12 @@
 
 import torch
 import torch.nn as nn
+import torchmetrics
 import torchvision
 import torchvision.transforms as transforms
 import torch.nn.functional as F
 import pytorch_lightning as pl
 from pytorch_lightning import Trainer
-
 
 # Hyper-parameters
 num_classes = 3
@@ -29,12 +29,12 @@ test_dir = 'DATA_CHAMBER_2021/test'
 
 # Data transforms
 training_transforms = transforms.Compose([transforms.Resize((32, 32)),
-                                            transforms.RandomHorizontalFlip(),
-                                            transforms.ToTensor(),
-                                            transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])])
+                                          transforms.RandomHorizontalFlip(),
+                                          transforms.ToTensor(),
+                                          transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])])
 testing_transforms = transforms.Compose([transforms.Resize((32, 32)),
-                                            transforms.ToTensor(),
-                                            transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])])
+                                         transforms.ToTensor(),
+                                         transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])])
 
 
 class VGG16(pl.LightningModule):
@@ -42,6 +42,7 @@ class VGG16(pl.LightningModule):
         super().__init__()
         self.features = self._make_layers()
         self.classfier_head = nn.Linear(512, 3)
+        self.accuracy = torchmetrics.Accuracy()
 
     def forward(self, x):
         out = self.features(x)
@@ -66,46 +67,40 @@ class VGG16(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         images, labels = batch
-        # images = images.reshape(-1, 32*32)
 
         # Forward pass
         outputs = self(images)
         loss = F.cross_entropy(outputs, labels)
 
-        tensorboard_logs = {'train_loss': loss}
-        # use key 'log'
-        return {"loss": loss, 'log': tensorboard_logs}
+        self.log('train_acc_step', self.accuracy(outputs, labels))
+        self.log("train_loss", loss)
+        return loss
 
     # define what happens for testing here
 
     def train_dataloader(self):
         train_dataset = torchvision.datasets.ImageFolder(train_dir, transform=training_transforms)
 
-        train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size, num_workers=4, shuffle=True)
+        train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size, num_workers=4,
+                                                   shuffle=True)
         return train_loader
 
     def test_dataloader(self):
         test_dataset = torchvision.datasets.ImageFolder(test_dir, transform=testing_transforms)
 
-        test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=batch_size, num_workers=4, shuffle=False)
+        test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=batch_size, num_workers=4,
+                                                  shuffle=False)
         return test_loader
 
     def test_step(self, batch, batch_idx):
         images, labels = batch
-        # images = images.reshape(-1, 32*32)
 
         # Forward pass
         outputs = self(images)
-
         loss = F.cross_entropy(outputs, labels)
-        return {"test_loss": loss}
 
-    def test_epoch_end(self, outputs):
-        # outputs = list of dictionaries
-        test_loss = torch.stack([x['test_loss'] for x in outputs]).mean()
-        tensorboard_logs = {'avg_test_loss': test_loss}
-        # use key 'log'
-        return {'test_loss': test_loss, 'log': tensorboard_logs}
+        self.log('train_acc_step', self.accuracy(outputs, labels))
+        return {"test_loss": loss}
 
     def configure_optimizers(self):
         return torch.optim.SGD(model.parameters(), lr=learning_rate)
@@ -120,7 +115,8 @@ class ConvNet(pl.LightningModule):
         self.conv2 = nn.Conv2d(6, 16, 5)
         self.fc1 = nn.Linear(16 * 5 * 5, 120)
         self.fc2 = nn.Linear(120, 70)
-        self.fc3 = nn.Linear(70, 3)         # 3 classes
+        self.fc3 = nn.Linear(70, 3)  # 3 classes
+        self.accuracy = torchmetrics.Accuracy()
 
     def forward(self, x):
         # -> n, 3, 32, 32
@@ -134,46 +130,39 @@ class ConvNet(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         images, labels = batch
-        #images = images.reshape(-1, 32*32)
 
         # Forward pass
         outputs = self(images)
         loss = F.cross_entropy(outputs, labels)
 
-        tensorboard_logs = {'train_loss': loss}
-        # use key 'log'
-        return {"loss": loss, 'log': tensorboard_logs}
-
-    # define what happens for testing here
+        self.log('train_acc', self.accuracy(outputs, labels))
+        self.log("train_loss", loss)
+        return loss
 
     def train_dataloader(self):
         train_dataset = torchvision.datasets.ImageFolder(train_dir, transform=training_transforms)
 
-        train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size, num_workers=4, shuffle=True)
+        train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size, num_workers=4,
+                                                   shuffle=True)
         return train_loader
 
     def test_dataloader(self):
         test_dataset = torchvision.datasets.ImageFolder(test_dir, transform=testing_transforms)
 
-        test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=batch_size, num_workers=4, shuffle=False)
+        test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=batch_size, num_workers=4,
+                                                  shuffle=False)
         return test_loader
 
     def test_step(self, batch, batch_idx):
         images, labels = batch
-        #images = images.reshape(-1, 32*32)
 
         # Forward pass
         outputs = self(images)
-
         loss = F.cross_entropy(outputs, labels)
-        return {"test_loss": loss}
 
-    def test_epoch_end(self, outputs):
-        # outputs = list of dictionaries
-        test_loss = torch.stack([x['test_loss'] for x in outputs]).mean()
-        tensorboard_logs = {'avg_test_loss': test_loss}
-        # use key 'log'
-        return {'test_loss': test_loss, 'log': tensorboard_logs}
+        self.log('test_acc', self.accuracy(outputs, labels))
+        self.log("test_loss", loss)
+        return loss
 
     def configure_optimizers(self):
         return torch.optim.Adam(model.parameters(), lr=learning_rate)
@@ -184,10 +173,9 @@ if __name__ == '__main__':
 
     trainer = Trainer(auto_lr_find=True, max_epochs=ConvNet_epochs, fast_dev_run=False, auto_scale_batch_size=True)
     trainer.fit(model)
+    trainer.test(model)
 
     # fast_dev_run=True -> runs single batch through training and validation
     # auto_lr_find: automatically finds a good learning rate before training
     # deterministic: makes training reproducable
     # gradient_clip_val: 0 default
-
-
