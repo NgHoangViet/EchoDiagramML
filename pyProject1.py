@@ -72,7 +72,7 @@ class VGG16(pl.LightningModule):
         outputs = self(images)
         loss = F.cross_entropy(outputs, labels)
 
-        self.log('train_acc_step', self.accuracy(outputs, labels))
+        self.log('train_acc', self.accuracy(outputs, labels))
         self.log("train_loss", loss)
         return loss
 
@@ -99,11 +99,12 @@ class VGG16(pl.LightningModule):
         outputs = self(images)
         loss = F.cross_entropy(outputs, labels)
 
-        self.log('train_acc_step', self.accuracy(outputs, labels))
-        return {"test_loss": loss}
+        self.log('test_acc', self.accuracy(outputs, labels))
+        self.log("test_loss", loss)
+        return loss
 
     def configure_optimizers(self):
-        return torch.optim.SGD(model.parameters(), lr=learning_rate)
+        return torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.9, weight_decay=5e-4)
 
 
 # Fully connected neural network with one hidden layer
@@ -119,6 +120,7 @@ class ConvNet(pl.LightningModule):
         self.accuracy = torchmetrics.Accuracy()
 
     def forward(self, x):
+        # W - F + 1
         # -> n, 3, 32, 32
         x = self.pool(F.relu(self.conv1(x)))  # -> n, 6, 14, 14
         x = self.pool(F.relu(self.conv2(x)))  # -> n, 16, 5, 5
@@ -169,9 +171,9 @@ class ConvNet(pl.LightningModule):
 
 
 if __name__ == '__main__':
-    model = ConvNet()
+    model = VGG16()
 
-    trainer = Trainer(auto_lr_find=True, max_epochs=ConvNet_epochs, fast_dev_run=False, auto_scale_batch_size=True)
+    trainer = Trainer(auto_lr_find=True, max_epochs=VGG16_epochs, fast_dev_run=False, auto_scale_batch_size=True)
     trainer.fit(model)
     trainer.test(model)
 
