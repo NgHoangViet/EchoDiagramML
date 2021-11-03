@@ -1,17 +1,9 @@
-# 0) Prepare data
-# 1) Design model(input size, output size, forward pass)
-# 2) Construct loss and optimizer
-# 3) Training loop
-#   - forward pass: compute prediction
-#   - backward pass: gradients
-#   - update weights
-
-
 import torch
 import torch.nn as nn
 import torchmetrics
 import torchvision
 import torchvision.transforms as transforms
+import torchvision.models as models
 import torch.nn.functional as F
 import pytorch_lightning as pl
 from pytorch_lightning import Trainer
@@ -28,13 +20,17 @@ train_dir = 'DATA_CHAMBER_2021/train'
 test_dir = 'DATA_CHAMBER_2021/test'
 
 # Data transforms
-training_transforms = transforms.Compose([transforms.Resize((32, 32)),
+training_transforms = transforms.Compose([transforms.Resize((256, 256)),
+                                          transforms.RandomCrop((224, 224)),
                                           transforms.RandomHorizontalFlip(),
                                           transforms.ToTensor(),
-                                          transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])])
-testing_transforms = transforms.Compose([transforms.Resize((32, 32)),
+                                          transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                                               std=[0.229, 0.224, 0.225])])
+testing_transforms = transforms.Compose([transforms.Resize((256, 256)),
+                                        transforms.CenterCrop((224, 224)),
                                          transforms.ToTensor(),
-                                         transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])])
+                                         transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                                              std=[0.229, 0.224, 0.225])])
 
 
 class VGG16(pl.LightningModule):
@@ -170,10 +166,68 @@ class ConvNet(pl.LightningModule):
         return torch.optim.Adam(model.parameters(), lr=learning_rate)
 
 
-if __name__ == '__main__':
-    model = VGG16()
+class Resnet18(pl.LightningModule):
+    def __init__(self):
+        super(Resnet18, self).__init__()
+        self.features = models.resnet18(pretrained=True)
+        # Freeze all layers
+        for param in self.features.parameters():
+            param.requires_grad = False
+        # change the last layer
+        num_ftrs = self.features.fc.in_features
+        self.features.fc = torch.nn.Linear(num_ftrs, 3)
 
-    trainer = Trainer(auto_lr_find=True, max_epochs=VGG16_epochs, fast_dev_run=False, auto_scale_batch_size=True)
+        self.accuracy = torchmetrics.Accuracy()
+
+    def forward(self, x):
+        out = self.features(x)
+        # out = F.log_softmax(out, dim=1)
+        return out
+
+    def training_step(self, batch, batch_idx):
+        images, labels = batch
+
+        # Forward pass
+        outputs = self(images)
+        loss = F.cross_entropy(outputs, labels)
+
+        self.log('train_acc', self.accuracy(outputs, labels))
+        self.log("train_loss", loss)
+        return loss
+
+    def train_dataloader(self):
+        train_dataset = torchvision.datasets.ImageFolder(train_dir, transform=training_transforms)
+
+        train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size, num_workers=4,
+                                                   shuffle=True)
+        return train_loader
+
+    def test_dataloader(self):
+        test_dataset = torchvision.datasets.ImageFolder(test_dir, transform=testing_transforms)
+
+        test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=batch_size, num_workers=4,
+                                                  shuffle=False)
+        return test_loader
+
+    def test_step(self, batch, batch_idx):
+        images, labels = batch
+
+        # Forward pass
+        outputs = self(images)
+        loss = F.cross_entropy(outputs, labels)
+
+        self.log('test_acc', self.accuracy(outputs, labels))
+        self.log("test_loss", loss)
+        return loss
+
+    def configure_optimizers(self):
+        return torch.optim.Adam(self.parameters(), lr=learning_rate)
+
+
+if __name__ == '__main__':
+    model = Resnet18()
+
+    trainer = Trainer(auto_lr_find=True, max_epochs=2, fast_dev_run=False, auto_scale_batch_size=True)
     trainer.fit(model)
     trainer.test(model)
 
