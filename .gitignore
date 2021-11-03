@@ -3,3 +3,7 @@ lightning_logs/version_6/events.out.tfevents.1635753198.LAPTOP-63S3HR72.4532.1
 lightning_logs/version_6/checkpoints/epoch=1-step=135.ckpt
 lightning_logs/version_6/hparams.yaml
 lightning_logs/version_6/events.out.tfevents.1635752713.LAPTOP-63S3HR72.4532.0
+lightning_logs/vgg16/checkpoints/epoch=1-step=135.ckpt
+lightning_logs/vgg16/events.out.tfevents.1635752713.LAPTOP-63S3HR72.4532.0
+lightning_logs/vgg16/hparams.yaml
+lightning_logs/vgg16/events.out.tfevents.1635753198.LAPTOP-63S3HR72.4532.1
