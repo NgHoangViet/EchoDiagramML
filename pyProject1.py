@@ -10,8 +10,6 @@ from pytorch_lightning import Trainer
 
 # Hyper-parameters
 num_classes = 3
-VGG16_epochs = 2
-ConvNet_epochs = 5
 batch_size = 100
 learning_rate = 0.001
 
@@ -27,16 +25,18 @@ training_transforms = transforms.Compose([transforms.Resize((256, 256)),
                                           transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                                                std=[0.229, 0.224, 0.225])])
 testing_transforms = transforms.Compose([transforms.Resize((256, 256)),
-                                        transforms.CenterCrop((224, 224)),
+                                         transforms.CenterCrop((224, 224)),
                                          transforms.ToTensor(),
                                          transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                                               std=[0.229, 0.224, 0.225])])
 
 
+# Need Resize(32,32)
 class VGG16(pl.LightningModule):
     def __init__(self):
         super().__init__()
         self.features = self._make_layers()
+
         self.classfier_head = nn.Linear(512, 3)
         self.accuracy = torchmetrics.Accuracy()
 
@@ -72,8 +72,6 @@ class VGG16(pl.LightningModule):
         self.log("train_loss", loss)
         return loss
 
-    # define what happens for testing here
-
     def train_dataloader(self):
         train_dataset = torchvision.datasets.ImageFolder(train_dir, transform=training_transforms)
 
@@ -103,7 +101,7 @@ class VGG16(pl.LightningModule):
         return torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.9, weight_decay=5e-4)
 
 
-# Fully connected neural network with one hidden layer
+# Need Resize(32,32)
 class ConvNet(pl.LightningModule):
     def __init__(self):
         super(ConvNet, self).__init__()
@@ -181,7 +179,66 @@ class Resnet18(pl.LightningModule):
 
     def forward(self, x):
         out = self.features(x)
-        # out = F.log_softmax(out, dim=1)
+
+        return out
+
+    def training_step(self, batch, batch_idx):
+        images, labels = batch
+
+        # Forward pass
+        outputs = self(images)
+        loss = F.cross_entropy(outputs, labels)
+
+        self.log('train_acc', self.accuracy(outputs, labels))
+        self.log("train_loss", loss)
+        return loss
+
+    def train_dataloader(self):
+        train_dataset = torchvision.datasets.ImageFolder(train_dir, transform=training_transforms)
+
+        train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size, num_workers=4,
+                                                   shuffle=True)
+        return train_loader
+
+    def test_dataloader(self):
+        test_dataset = torchvision.datasets.ImageFolder(test_dir, transform=testing_transforms)
+
+        test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=batch_size, num_workers=4,
+                                                  shuffle=False)
+        return test_loader
+
+    def test_step(self, batch, batch_idx):
+        images, labels = batch
+
+        # Forward pass
+        outputs = self(images)
+        loss = F.cross_entropy(outputs, labels)
+
+        self.log('test_acc', self.accuracy(outputs, labels))
+        self.log("test_loss", loss)
+        return loss
+
+    def configure_optimizers(self):
+        return torch.optim.Adam(self.parameters(), lr=learning_rate)
+
+
+class GoogleNet(pl.LightningModule):
+    def __init__(self):
+        super(GoogleNet, self).__init__()
+        self.features = models.googlenet(pretrained=True)
+        # Freeze all layers
+        for param in self.features.parameters():
+            param.requires_grad = False
+        # change the last layer
+        num_ftrs = self.features.fc.in_features
+        print(num_ftrs)
+        self.features.fc = torch.nn.Linear(num_ftrs, 3)
+
+        self.accuracy = torchmetrics.Accuracy()
+
+    def forward(self, x):
+        out = self.features(x)
+
         return out
 
     def training_step(self, batch, batch_idx):
@@ -225,7 +282,7 @@ class Resnet18(pl.LightningModule):
 
 
 if __name__ == '__main__':
-    model = Resnet18()
+    model = GoogleNet()
 
     trainer = Trainer(auto_lr_find=True, max_epochs=2, fast_dev_run=False, auto_scale_batch_size=True)
     trainer.fit(model)
