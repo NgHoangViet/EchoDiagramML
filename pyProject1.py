@@ -18,12 +18,15 @@ train_dir = 'DATA_CHAMBER_2021/train'
 test_dir = 'DATA_CHAMBER_2021/test'
 
 # Data transforms
-training_transforms = transforms.Compose([transforms.Resize((224, 224)),
+training_transforms = transforms.Compose([transforms.Resize((256, 256)),
+                                          transforms.RandomCrop((224, 224)),
+                                          transforms.GaussianBlur(kernel_size=(5, 9), sigma=(0.1, 5)),
                                           transforms.RandomHorizontalFlip(),
                                           transforms.ToTensor(),
                                           transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                                                std=[0.229, 0.224, 0.225])])
-testing_transforms = transforms.Compose([transforms.Resize((224, 224)),
+testing_transforms = transforms.Compose([transforms.Resize((256, 256)),
+                                         transforms.CenterCrop((224, 224)),
                                          transforms.ToTensor(),
                                          transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                                               std=[0.229, 0.224, 0.225])])
@@ -39,6 +42,7 @@ class ConvNet(pl.LightningModule):
         self.fc1 = nn.Linear(16 * 5 * 5, 120)
         self.fc2 = nn.Linear(120, 70)
         self.fc3 = nn.Linear(70, 3)  # 3 classes
+
         self.accuracy = torchmetrics.Accuracy()
 
     def forward(self, x):
@@ -266,7 +270,7 @@ class VGG16(pl.LightningModule):
 
 
 if __name__ == '__main__':
-    model = VGG16()
+    model = GoogleNet()
 
     trainer = Trainer(auto_lr_find=True, max_epochs=5, fast_dev_run=False, auto_scale_batch_size=True)
     trainer.fit(model)
